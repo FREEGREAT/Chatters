@@ -36,7 +36,6 @@ export default function MessageList({ messages }: Props) {
           {messages.map((m) => (
             <MessageItem key={m.id} message={m} />
           ))}
-          {/* Spacer to ensure last message is visible */}
           <div className="h-1" />
         </>
       )}

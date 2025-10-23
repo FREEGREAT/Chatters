@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/button";
+import { HubConnectionBuilder } from "@microsoft/signalr";
 import { Input } from "@heroui/input";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 
@@ -12,11 +13,29 @@ export default function Home() {
   const [chatroom, setChatroom] = useState("");
   const [error, setError] = useState("");
   const router = useRouter();
+  
+  const onSubmit = (e: { preventDefault: () => void; }) => {
+    e.preventDefault();
+    JoinChat(username, chatroom);
+  }
 
-  // Check if user is already logged in
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Check for existing username on component mount
+  const JoinChat = async (userName: string, chatRoom: string) => {
+    var connect = new HubConnectionBuilder()
+      .withUrl("http://localhost:5276/chat")
+      .withAutomaticReconnect()
+      .build();
+    
+      try{
+        await connect.start();
+        await connect.invoke("JoinChat", { userName, chatRoom });
+      }catch(err){
+        console.log(err);
+      }
+
+  }
+
   useState(() => {
     try {
       const savedUsername = localStorage.getItem("chatters.username");
@@ -25,7 +44,6 @@ export default function Home() {
         setIsLoggedIn(true);
       }
     } catch (err) {
-      // ignore storage errors
     }
   });
 
@@ -41,7 +59,6 @@ export default function Home() {
     try {
       localStorage.setItem("chatters.username", username.trim());
     } catch (err) {
-      // ignore storage errors
     }
 
     router.push(`/chat/${encodeURIComponent(chatroom.trim())}`);
@@ -53,7 +70,6 @@ export default function Home() {
       setUsername("");
       setIsLoggedIn(false);
     } catch (err) {
-      // ignore storage errors
     }
   };
 

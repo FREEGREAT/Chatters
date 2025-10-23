@@ -17,21 +17,17 @@ export default function ChatRoomPage() {
   const wsRef = useRef<WebSocket | null>(null);
   const { setRoomName } = useRoom();
 
-  // Set room name in global header
   useEffect(() => {
     setRoomName(room);
     return () => setRoomName(null);
   }, [room, setRoomName]);
 
   useEffect(() => {
-    // Placeholder: the backend will be SignalR; for now we simulate a WebSocket
-    // Keep connection code minimal so user can replace with SignalR client later
     const ws = new WebSocket("ws://localhost:5000/ws");
     wsRef.current = ws;
 
     ws.addEventListener("open", () => {
       setConnected(true);
-      // Join room
       ws.send(JSON.stringify({ type: "join", room }));
     });
 
@@ -60,7 +56,6 @@ export default function ChatRoomPage() {
   }, [room]);
 
   const handleSend = async (text: string) => {
-    // Send via WebSocket (or SignalR in your backend)
     const msg: Message = {
       id: Math.random().toString(36).slice(2, 9),
       content: text,
@@ -68,13 +63,11 @@ export default function ChatRoomPage() {
       timestamp: new Date().toISOString(),
     };
 
-    // Optimistic UI
     setMessages((prev) => [...prev, msg]);
 
     wsRef.current?.send(JSON.stringify({ type: "message", room, message: msg }));
   };
 
-  // Add some test messages for debugging
   useEffect(() => {
     const testMessages: Message[] = Array.from({ length: 50 }, (_, i) => ({
       id: `test-${i}`,
@@ -89,7 +82,6 @@ export default function ChatRoomPage() {
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-1 p-2 sm:p-4 min-h-0">
         <div className="max-w-4xl mx-auto h-full flex flex-col bg-content1/30 rounded-lg shadow-lg">
-          {/* Back button */}
           <div className="p-3 border-b border-content1/20 flex justify-between items-center">
             <Button
               size="sm"
