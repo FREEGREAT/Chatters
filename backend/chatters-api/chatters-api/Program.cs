@@ -1,5 +1,7 @@
 using chatters_api.Hubs;
 using chatters_api.Services;
+using chatters_api.Data; 
+using Microsoft.EntityFrameworkCore; 
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,7 +16,14 @@ builder.Services.AddStackExchangeRedisCache(options =>
 {
     var connection = builder.Configuration.GetConnectionString("Redis");
     options.Configuration = connection;
+    options.InstanceName = "chatters_cache_";
 });
+
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<ChatService>();
+
 
 //builder.Services.AddOpenApi();
 
@@ -38,5 +47,12 @@ var app = builder.Build();
 app.UseCors();
 
 app.MapHub<ChatHub>("/chat");
+
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    dbContext.Database.Migrate();
+}
+
 
 app.Run();
