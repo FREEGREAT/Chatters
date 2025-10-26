@@ -20,63 +20,29 @@ const RoomContext = createContext<RoomContextType | undefined>(undefined);
 
 export function RoomProvider({ children }: { children: ReactNode }) {
   const [roomName, setRoomName] = useState<string | null>(null);
-  const [username, setUsername] = useState<string | null>(null);
-  
-  const {
-    isConnected,
-    isConnecting,
-    error: connectionError,
-    invoke,
-    on,
-    off
-  } = useSignalR({
-    url: "http://localhost:5243/chat",
-    autoReconnect: true,
-    onConnected: () => {
-      console.log("Connected to SignalR hub");
-    },
-    onDisconnected: () => {
-      console.log("Disconnected from SignalR hub");
-    },
-    onError: (error) => {
-      console.error("SignalR error:", error);
+  const [username, setUsername] = useState<string | null>(() => {
+    // Initialize username from localStorage if available
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem("chatters.username");
     }
+    return null;
   });
+  const [isConnected, setIsConnected] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState<string | null>(null);
 
   const joinRoom = async (roomName: string, username: string) => {
-    try {
-      await invoke("JoinChat", { userName: username, chatRoom: roomName });
-      setRoomName(roomName);
-      setUsername(username);
-    } catch (error) {
-      console.error("Failed to join room:", error);
-      throw error;
-    }
+    setRoomName(roomName);
+    setUsername(username);
   };
 
   const leaveRoom = async () => {
-    try {
-      if (roomName && username) {
-        await invoke("LeaveChat", { userName: username, chatRoom: roomName });
-      }
-      setRoomName(null);
-      setUsername(null);
-    } catch (error) {
-      console.error("Failed to leave room:", error);
-    }
+    setRoomName(null);
+    setUsername(null);
   };
 
   const sendMessage = async (message: string) => {
-    try {
-      await invoke("SendMessage", { 
-        userName: username, 
-        chatRoom: roomName, 
-        message 
-      });
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      throw error;
-    }
+    // This will be implemented in the chat component
   };
 
   return (

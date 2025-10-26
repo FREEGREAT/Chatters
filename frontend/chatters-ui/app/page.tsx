@@ -32,18 +32,26 @@ export default function Home() {
     setError("");
     setIsConnecting(true);
 
-    if (!username.trim() || !chatroom.trim()) {
+    const trimmedUsername = username.trim();
+    const trimmedChatroom = chatroom.trim();
+
+    console.log("Login attempt:", { username: trimmedUsername, chatroom: trimmedChatroom });
+
+    if (!trimmedUsername || !trimmedChatroom) {
+      console.log("Missing required fields");
       setError("Please provide both username and chat room name.");
       setIsConnecting(false);
       return;
     }
 
     try {
-      localStorage.setItem("chatters.username", username.trim());
+      console.log("Saving username to localStorage");
+      localStorage.setItem("chatters.username", trimmedUsername);
       
-      router.push(`/chat/${encodeURIComponent(chatroom.trim())}`);
+      console.log("Redirecting to chat room");
+      router.push(`/chat/${encodeURIComponent(trimmedChatroom)}`);
     } catch (err) {
-      console.error("Error saving username:", err);
+      console.error("Error during login:", err);
       setError("Failed to save username. Please try again.");
       setIsConnecting(false);
     }

@@ -1,5 +1,10 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { HubConnection, HubConnectionBuilder, HubConnectionState } from '@microsoft/signalr';
+import { 
+  HubConnection, 
+  HubConnectionBuilder, 
+  HubConnectionState,
+  JsonHubProtocol
+} from '@microsoft/signalr';
 
 interface UseSignalROptions {
   url: string;
@@ -35,20 +40,57 @@ export const useSignalR = ({
   const connectionRef = useRef<HubConnection | null>(null);
 
   const createConnection = useCallback(() => {
-    const builder = new HubConnectionBuilder().withUrl(url);
+    console.log("Creating SignalR connection to:", url);
+    const builder = new HubConnectionBuilder()
+      .withUrl(url)
+      .configureLogging("information")
+      .withHubProtocol(new JsonHubProtocol())
     
     if (autoReconnect) {
-      builder.withAutomaticReconnect();
+      // Configure more conservative retry policy
+      builder.withAutomaticReconnect({
+        nextRetryDelayInMilliseconds: (retryContext) => {
+          if (retryContext.previousRetryCount === 0) {
+            return 0;
+          }
+          if (retryContext.elapsedMilliseconds > 180000) { // 3 minutes
+            return null; // Stop retrying after 3 minutes
+          }
+          // Exponential backoff starting from 2 seconds
+          return Math.min(2000 * Math.pow(2, retryContext.previousRetryCount - 1), 30000);
+        }
+      });
     }
 
-    return builder.build();
+    const connection = builder.build();
+    
+    // Preserve case in method names
+    connection.on = ((originalOn) => {
+      return function(methodName: string, newMethod: (...args: any[]) => void) {
+        return originalOn.call(connection, methodName, newMethod);
+      };
+    })(connection.on);
+
+    return connection;
   }, [url, autoReconnect]);
 
   const connect = useCallback(async () => {
-    if (connectionRef.current?.state === HubConnectionState.Connected) {
+    // Prevent multiple simultaneous connection attempts
+    if (isConnecting) {
+      console.log("Connection attempt already in progress");
       return;
     }
 
+    if (connectionRef.current?.state === HubConnectionState.Connected) {
+      console.log("Already connected");
+      return;
+    }
+
+    // Add a connection lock
+    const connectionLock = Math.random().toString(36).substring(7);
+    const currentLock = connectionLock;
+    
+    console.log("Attempting to connect to SignalR hub");
     setIsConnecting(true);
     setError(null);
 
@@ -83,11 +125,21 @@ export const useSignalR = ({
 
       await newConnection.start();
       
-      connectionRef.current = newConnection;
-      setConnection(newConnection);
-      setIsConnected(true);
-      setIsConnecting(false);
-      onConnected?.();
+      // Only update state if this is still the active connection attempt
+      if (currentLock === connectionLock) {
+        connectionRef.current = newConnection;
+        setConnection(newConnection);
+        setIsConnected(true);
+        setIsConnecting(false);
+        onConnected?.();
+      } else {
+        // If this isn't the active connection attempt, clean it up
+        try {
+          await newConnection.stop();
+        } catch (err) {
+          console.error("Error cleaning up superseded connection:", err);
+        }
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to connect';
       setError(errorMessage);
@@ -97,16 +149,18 @@ export const useSignalR = ({
   }, [createConnection, onConnected, onDisconnected, onError]);
 
   const disconnect = useCallback(async () => {
-    if (connectionRef.current) {
+    const currentConnection = connectionRef.current;
+    if (currentConnection) {
+      // Clear the ref immediately to prevent any new operations
+      connectionRef.current = null;
+      setConnection(null);
+      setIsConnected(false);
+      setIsConnecting(false);
+
       try {
-        await connectionRef.current.stop();
+        await currentConnection.stop();
       } catch (err) {
         console.error('Error disconnecting:', err);
-      } finally {
-        connectionRef.current = null;
-        setConnection(null);
-        setIsConnected(false);
-        setIsConnecting(false);
       }
     }
   }, []);
@@ -142,12 +196,25 @@ export const useSignalR = ({
   }, []);
 
   useEffect(() => {
-    connect();
+    let isEffectActive = true;
+
+    const initializeConnection = async () => {
+      if (!isEffectActive) return;
+      
+      try {
+        await connect();
+      } catch (err) {
+        console.error("Failed to initialize connection:", err);
+      }
+    };
+
+    initializeConnection();
 
     return () => {
+      isEffectActive = false;
       disconnect();
     };
-  }, [connect, disconnect]);
+  }, []);
 
   return {
     connection,

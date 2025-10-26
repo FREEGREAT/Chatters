@@ -3,115 +3,201 @@
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Message } from "../../types/chat";
+import { ErrorBoundary } from "../../components/ErrorBoundary";
 import MessageList from "../components/MessageList";
 import ChatInput from "../components/ChatInput";
 import { useRoom } from "../../contexts/RoomContext";
-import { Button } from "@heroui/button";
+import { useSignalR } from "../../hooks/useSignalR";
 
 export default function ChatRoomPage() {
   const params = useParams();
   const router = useRouter();
   const room = (params as any)?.room ?? "general";
   const [messages, setMessages] = useState<Message[]>([]);
-  const { 
-    setRoomName, 
-    setUsername, 
-    isConnected, 
-    isConnecting, 
-    connectionError,
-    sendMessage,
-    joinRoom,
-    leaveRoom
-  } = useRoom();
-
-  // Ініціалізація кімнати та підключення до SignalR
+  const { username, setUsername } = useRoom();
+  
   useEffect(() => {
-    const initializeRoom = async () => {
-      try {
-        // Отримуємо збережений username
-        const savedUsername = localStorage.getItem("chatters.username");
-        if (!savedUsername) {
-          router.push("/");
-          return;
-        }
+    const savedUsername = localStorage.getItem("chatters.username");
+    if (!savedUsername) {
+      console.log("No saved username found, redirecting to login");
+      router.push('/');
+      return;
+    }
+    
+    if (!username) {
+      console.log("Setting username from localStorage:", savedUsername);
+      setUsername(savedUsername);
+    }
+  }, [username, setUsername, router]);
+  
+  const {
+    isConnected,
+    isConnecting,
+    error: connectionError,
+    invoke,
+    on,
+    off
+  } = useSignalR({
+    url: "http://localhost:5243/chat",
+    autoReconnect: true,
+    onConnected: () => {
+      console.log("Connected to SignalR hub");
+    },
+    onDisconnected: () => {
+      console.log("Disconnected from SignalR hub");
+      // Clear messages when disconnected to avoid stale state
+      setMessages([]);
+    },
+    onError: (error) => {
+      console.error("SignalR error:", error);
+    }
+  });
 
-        setUsername(savedUsername);
-        setRoomName(room);
+  // Effect to handle SignalR connection and room joining
+  useEffect(() => {
+    if (!username || !room) {
+      console.log("Waiting for username and room to be available");
+      return;
+    }
+
+    let isMounted = true;
+    let isJoined = false;
+    let joinAttemptTimeout: NodeJS.Timeout | null = null;
+
+    // Only attempt to join if we're connected
+    if (!isConnected) {
+      console.log("Waiting for SignalR connection...");
+      return;
+    }
+
+    const handleReceiveMessage = (message: Message) => {
+      if (!isMounted) return;
+      console.log("Received message:", message);
+      setMessages(prev => [...prev, message]);
+    };
+
+    const handleReceiveSentiment = (messageId: string, sentiment: any) => {
+      if (!isMounted) return;
+      console.log("Received sentiment for message:", messageId, sentiment);
+      setMessages(prev =>
+        prev.map(m => m.id === messageId ? { ...m, sentiment } : m)
+      );
+    };
+
+    const joinRoom = async () => {
+      if (!isMounted || isJoined || !isConnected) return;
+
+      try {
+        // Set up event handlers before joining room
+        console.log("Setting up SignalR event handlers");
+        on("ReceiveMessage", handleReceiveMessage);
+        on("ReceiveSentiment", handleReceiveSentiment);
+
+        // Join room
+        console.log("Joining chat room:", { username, room });
+        await invoke("JoinChat", { userName: username, chatRoom: room });
         
-        // Чекаємо поки SignalR підключиться, потім приєднуємося до кімнати
-        if (isConnected) {
-          await joinRoom(room, savedUsername);
+        if (isMounted) {
+          console.log("Successfully joined chat room");
+          isJoined = true;
+        } else {
+          // Component unmounted during join, cleanup
+          off("ReceiveMessage", handleReceiveMessage);
+          off("ReceiveSentiment", handleReceiveSentiment);
+          try {
+            await invoke("LeaveChat", { userName: username, chatRoom: room });
+          } catch (err) {
+            console.error("Error cleaning up after unmount during join:", err);
+          }
         }
-      } catch (error) {
-        console.error("Failed to initialize room:", error);
+      } catch (err) {
+        console.error("Failed to join chat room:", err);
+        if (isMounted) {
+          // Clean up handlers if join fails
+          off("ReceiveMessage", handleReceiveMessage);
+          off("ReceiveSentiment", handleReceiveSentiment);
+        }
       }
     };
 
-    initializeRoom();
+    const leaveRoom = async () => {
+      if (!isJoined) return;
+      
+      try {
+        // Remove event handlers first to prevent any race conditions
+        console.log("Removing SignalR event handlers");
+        off("ReceiveMessage", handleReceiveMessage);
+        off("ReceiveSentiment", handleReceiveSentiment);
+        
+        if (isConnected) {
+          console.log("Leaving chat room");
+          await invoke("LeaveChat", { userName: username, chatRoom: room });
+          console.log("Successfully left chat room");
+        }
+      } catch (err) {
+        console.error("Error leaving chat room:", err);
+      }
+    };
+
+    // Schedule join attempt with a small delay to prevent rapid reconnection attempts
+    joinAttemptTimeout = setTimeout(joinRoom, 500);
 
     return () => {
+      isMounted = false;
+      if (joinAttemptTimeout) {
+        clearTimeout(joinAttemptTimeout);
+      }
       leaveRoom();
-      setRoomName(null);
-      setUsername(null);
     };
-  }, [room, isConnected, setRoomName, setUsername, joinRoom, leaveRoom, router]);
+  }, [username, room, isConnected, on, off, invoke]);
 
   const handleSend = async (text: string) => {
+    if (!isConnected || !username) return;
+
     try {
-      await sendMessage(text);
-      
-      // Додаємо повідомлення локально для миттєвого відображення
-      const msg: Message = {
-        id: Math.random().toString(36).slice(2, 9),
-        content: text,
-        sender: "You",
-        timestamp: new Date().toISOString(),
-      };
-      
-      setMessages((prev) => [...prev, msg]);
+      await invoke("SendMessage", {
+        userName: username,
+        chatRoom: room,
+        message: text
+      });
     } catch (error) {
       console.error("Failed to send message:", error);
     }
   };
 
-  // Тестові повідомлення для демонстрації (можна видалити в продакшені)
-  useEffect(() => {
-    const testMessages: Message[] = Array.from({ length: 5 }, (_, i) => ({
-      id: `test-${i}`,
-      content: `Test message ${i + 1} - Welcome to the chat room!`,
-      sender: i % 2 === 0 ? "You" : "Other User",
-      timestamp: new Date(Date.now() - (5 - i) * 60000).toISOString(),
-    }));
-    setMessages(testMessages);
-  }, []);
-
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-1 p-2 sm:p-4 min-h-0">
-        <div className="max-w-4xl mx-auto h-full flex flex-col bg-content1/30 rounded-lg shadow-lg">
-          <div className="p-3 border-b border-content1/20 flex justify-between items-center">
-            <Button
-              size="sm"
-              variant="light"
-              onClick={() => router.push("/")}
-              className="text-foreground/70 hover:text-foreground"
-            >
-              ← Back to Home
-            </Button>
-            <div className="text-sm text-foreground/60">
-              {isConnected ? "🟢 Connected" : isConnecting ? "🟡 Connecting..." : "🔴 Disconnected"}
-              {connectionError && <span className="text-danger ml-2">({connectionError})</span>}
-            </div>
+    <ErrorBoundary>
+      <div className="h-screen flex flex-col bg-gradient-to-br from-violet-900 via-slate-950 to-slate-900">
+        <header className="px-6 py-4 flex items-center justify-between text-foreground/90">
+          <div className="flex items-center gap-3">
+            <h2 className="text-xl font-bold">Chatters</h2>
+            <span className="text-sm opacity-70">Room: {room}</span>
           </div>
-          
-          <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="text-sm">
+            {isConnected ? (
+              <span className="text-green-400">Connected</span>
+            ) : isConnecting ? (
+              <span className="text-yellow-300">Connecting...</span>
+            ) : (
+              <span className="text-red-400">Disconnected</span>
+            )}
+            {connectionError && (
+              <span className="ml-2 text-red-400">{connectionError}</span>
+            )}
+          </div>
+        </header>
+
+      <main className="flex-1 p-6">
+        <div className="max-w-4xl mx-auto h-full flex flex-col bg-content1/30 rounded-lg shadow-lg overflow-hidden">
+          <div className="flex-1 overflow-auto">
             <MessageList messages={messages} />
           </div>
-          <div className="border-t border-content1/20 p-2 sm:p-3 flex-shrink-0 bg-content1/30">
+          <div className="border-t border-content1/20 p-4">
             <ChatInput onSend={handleSend} />
           </div>
         </div>
-      </div>
+      </main>
     </div>
+    </ErrorBoundary>
   );
 }
