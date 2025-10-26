@@ -9,8 +9,8 @@
     "Redis": "localhost:6379"
   },
   "AzureTextAnalytics": {
-    "Endpoint": "https://chatters-text-analyser.cognitiveservices.azure.com/",
-    "Key": ""
+    "Endpoint": "URL"
+    "Key": "api_key"
   },
   "AllowedHosts": "*"
 }

@@ -11,7 +11,6 @@ function ChatInput({ onSend }: Props) {
   const [loading, setLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Фокус при першому рендері
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
@@ -26,7 +25,6 @@ function ChatInput({ onSend }: Props) {
       console.error(err);
     } finally {
       setLoading(false);
-      // Невеликий таймаут, щоб гарантувати, що фокус повернеться після всіх оновлень React
       setTimeout(() => inputRef.current?.focus(), 0);
     }
   };

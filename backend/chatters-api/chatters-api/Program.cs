@@ -1,6 +1,14 @@
 using chatters_api.Hubs;
+using chatters_api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+var endpoint = builder.Configuration["AzureTextAnalytics:Endpoint"];
+var key = builder.Configuration["AzureTextAnalytics:Key"];
+
+
+builder.Services.AddSingleton(new CognitiveService(endpoint, key));
+
 
 builder.Services.AddStackExchangeRedisCache(options =>
 {

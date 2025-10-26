@@ -72,12 +72,11 @@ export default function ChatRoomPage() {
   const handleLeaveChat = useCallback(async () => {
     console.log("Leaving chat...");
     try {
-      await disconnect(); // 1. Закриваємо з'єднання SignalR
-      leaveRoom();       // 2. Очищуємо стан кімнати та користувача
-      router.push('/');  // 3. Перенаправляємо на головну сторінку
+      await disconnect(); 
+      leaveRoom();       
+      router.push('/');  
     } catch (error) {
       console.error("Failed to leave chat cleanly:", error);
-      // Навіть якщо є помилка, все одно перенаправляємо
       router.push('/');
     }
   }, [disconnect, leaveRoom, router]);
