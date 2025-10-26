@@ -70,10 +70,16 @@ export default function ChatRoomPage() {
       return;
     }
 
-    const handleReceiveMessage = (message: Message) => {
+    const handleReceiveMessage = (userName: string, message: string) => {
       if (!isMounted) return;
-      console.log("Received message:", message);
-      setMessages(prev => [...prev, message]);
+      console.log("Received message from:", userName, message);
+      const newMessage: Message = {
+        id: Date.now().toString(), // Generate temporary ID
+        content: message,
+        sender: userName,
+        timestamp: new Date().toISOString()
+      };
+      setMessages(prev => [...prev, newMessage]);
     };
 
     const handleReceiveSentiment = (messageId: string, sentiment: any) => {
@@ -90,7 +96,7 @@ export default function ChatRoomPage() {
       try {
         // Set up event handlers before joining room
         console.log("Setting up SignalR event handlers");
-        on("ReceiveMessage", handleReceiveMessage);
+        on("RecieveMessage", handleReceiveMessage); // Note: matches the backend spelling
         on("ReceiveSentiment", handleReceiveSentiment);
 
         // Join room
@@ -102,7 +108,7 @@ export default function ChatRoomPage() {
           isJoined = true;
         } else {
           // Component unmounted during join, cleanup
-          off("ReceiveMessage", handleReceiveMessage);
+          off("RecieveMessage", handleReceiveMessage);
           off("ReceiveSentiment", handleReceiveSentiment);
           try {
             await invoke("LeaveChat", { userName: username, chatRoom: room });
@@ -114,7 +120,7 @@ export default function ChatRoomPage() {
         console.error("Failed to join chat room:", err);
         if (isMounted) {
           // Clean up handlers if join fails
-          off("ReceiveMessage", handleReceiveMessage);
+          off("RecieveMessage", handleReceiveMessage);
           off("ReceiveSentiment", handleReceiveSentiment);
         }
       }
@@ -126,7 +132,7 @@ export default function ChatRoomPage() {
       try {
         // Remove event handlers first to prevent any race conditions
         console.log("Removing SignalR event handlers");
-        off("ReceiveMessage", handleReceiveMessage);
+        off("RecieveMessage", handleReceiveMessage);
         off("ReceiveSentiment", handleReceiveSentiment);
         
         if (isConnected) {
