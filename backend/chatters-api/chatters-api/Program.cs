@@ -2,6 +2,12 @@ using chatters_api.Hubs;
 
 var builder = WebApplication.CreateBuilder(args);
 
+builder.Services.AddStackExchangeRedisCache(options =>
+{
+    var connection = builder.Configuration.GetConnectionString("Redis");
+    options.Configuration = connection;
+});
+
 //builder.Services.AddOpenApi();
 
 builder.Services.AddCors(options =>
