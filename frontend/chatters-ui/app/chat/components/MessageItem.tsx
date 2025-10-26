@@ -10,8 +10,8 @@ interface Props {
 export default function MessageItem({ message, currentUser }: Props) {
   const isMe = currentUser && message.sender === currentUser;
   const isSystem = message.sender === "System";
-  const sentiment = message.sentiment;
-
+  const sentimentLabel = message.sentimentLabel;
+  const sentimentScore = message.sentimentScore;
   if (isSystem) {
     return (
       <div className="w-full flex justify-center">
@@ -24,7 +24,7 @@ export default function MessageItem({ message, currentUser }: Props) {
     );
   }
 
-  return (
+return (
     <div className={`w-full flex ${isMe ? "justify-end" : "justify-start"}`}>
       <div className={`max-w-[85%] sm:max-w-[80%] p-2 sm:p-3 rounded-lg 
         ${isMe 
@@ -38,10 +38,13 @@ export default function MessageItem({ message, currentUser }: Props) {
 
         <div className="mt-1 sm:mt-2 text-sm sm:text-base text-foreground/95 break-words">{message.content}</div>
 
-        {!isSystem && sentiment && (
+        {!isSystem && sentimentLabel && sentimentScore !== undefined && ( 
           <div className="mt-2 text-sm flex items-center gap-2">
-            <span className={`px-2 py-1 rounded-full text-xs ${sentiment.label === 'positive' ? 'bg-green-800 text-green-200' : sentiment.label === 'negative' ? 'bg-red-800 text-red-200' : 'bg-neutral-800 text-neutral-200'}`}>
-              {sentiment.label} • {(sentiment.score * 100).toFixed(0)}%
+            <span className={`px-2 py-1 rounded-full text-xs 
+              ${sentimentLabel === 'positive' ? 'bg-green-800 text-green-200' 
+                : sentimentLabel === 'negative' ? 'bg-red-800 text-red-200' 
+                : 'bg-neutral-800 text-neutral-200'}`}>
+              {sentimentLabel} • {(sentimentScore * 100).toFixed(0)}%
             </span>
           </div>
         )}

@@ -61,7 +61,6 @@ export default function ChatRoomPage() {
     },
     onDisconnected: () => {
       console.log("Disconnected from SignalR hub");
-      // Clear messages when disconnected to avoid stale state
       setMessages([]);
     },
     onError: (error) => {
@@ -81,7 +80,7 @@ export default function ChatRoomPage() {
     }
   }, [disconnect, leaveRoom, router]);
 
-  // Effect to handle SignalR connection and room joining
+ 
   const handleSendMessage = async (text: string) => {
     if (!isConnected || !username) {
       console.error("Cannot send message: not connected or no username");
@@ -107,20 +106,22 @@ export default function ChatRoomPage() {
     let isJoined = false;
     let joinAttemptTimeout: NodeJS.Timeout | null = null;
 
-    // Only attempt to join if we're connected
     if (!isConnected) {
       console.log("Waiting for SignalR connection...");
       return;
     }
 
-    const handleReceiveMessage = (userName: string, message: string) => {
+    const handleReceiveMessage = (userName: string, messageContent: string, sentimentLabel?: string, sentimentScore?: number) => {
       if (!isMounted) return;
-      console.log("Received message from:", userName, message);
+      console.log("Received message from:", userName, messageContent, sentimentLabel, sentimentScore);
+      
       const newMessage: Message = {
-        id: Date.now().toString(), // Generate temporary ID
-        content: message,
+        id: Date.now().toString(), 
+        content: messageContent,
         sender: userName,
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        sentimentLabel: sentimentLabel,
+        sentimentScore: sentimentScore
       };
       setMessages(prev => [...prev, newMessage]);
     };
@@ -137,22 +138,17 @@ export default function ChatRoomPage() {
       if (!isMounted || isJoined || !isConnected) return;
 
       try {
-        // Set up event handlers before joining room
         console.log("Setting up SignalR event handlers");
-        on("RecieveMessage", handleReceiveMessage); // Note: matches the backend spelling
-        on("ReceiveSentiment", handleReceiveSentiment);
+        on("RecieveMessage", handleReceiveMessage); 
 
-        // Join room
-        console.log("Joining chat room:", { username, room });
+      console.log("Joining chat room:", { username, room });
         await invoke("JoinChat", { userName: username, chatRoom: room });
         
         if (isMounted) {
           console.log("Successfully joined chat room");
           isJoined = true;
         } else {
-          // Component unmounted during join, cleanup
           off("RecieveMessage", handleReceiveMessage);
-          off("ReceiveSentiment", handleReceiveSentiment);
           try {
             await invoke("LeaveChat", { userName: username, chatRoom: room });
           } catch (err) {
@@ -162,9 +158,7 @@ export default function ChatRoomPage() {
       } catch (err) {
         console.error("Failed to join chat room:", err);
         if (isMounted) {
-          // Clean up handlers if join fails
           off("RecieveMessage", handleReceiveMessage);
-          off("ReceiveSentiment", handleReceiveSentiment);
         }
       }
     };
@@ -173,10 +167,8 @@ export default function ChatRoomPage() {
       if (!isJoined) return;
       
       try {
-        // Remove event handlers first to prevent any race conditions
         console.log("Removing SignalR event handlers");
         off("RecieveMessage", handleReceiveMessage);
-        off("ReceiveSentiment", handleReceiveSentiment);
         
         if (isConnected) {
           console.log("Leaving chat room");
@@ -187,6 +179,7 @@ export default function ChatRoomPage() {
         console.error("Error leaving chat room:", err);
       }
     };
+
 
     // Schedule join attempt with a small delay to prevent rapid reconnection attempts
     joinAttemptTimeout = setTimeout(joinRoom, 500);
