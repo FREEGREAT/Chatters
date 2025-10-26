@@ -1,10 +1,9 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@heroui/button";
-import { HubConnectionBuilder } from "@microsoft/signalr";
 import { Input } from "@heroui/input";
 import { Card, CardBody, CardHeader } from "@heroui/card";
 
@@ -12,31 +11,11 @@ export default function Home() {
   const [username, setUsername] = useState("");
   const [chatroom, setChatroom] = useState("");
   const [error, setError] = useState("");
-  const router = useRouter();
-  
-  const onSubmit = (e: { preventDefault: () => void; }) => {
-    e.preventDefault();
-    JoinChat(username, chatroom);
-  }
-
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const router = useRouter();
 
-  const JoinChat = async (userName: string, chatRoom: string) => {
-    var connect = new HubConnectionBuilder()
-      .withUrl("http://localhost:5276/chat")
-      .withAutomaticReconnect()
-      .build();
-    
-      try{
-        await connect.start();
-        await connect.invoke("JoinChat", { userName, chatRoom });
-      }catch(err){
-        console.log(err);
-      }
-
-  }
-
-  useState(() => {
+  useEffect(() => {
     try {
       const savedUsername = localStorage.getItem("chatters.username");
       if (savedUsername) {
@@ -44,32 +23,40 @@ export default function Home() {
         setIsLoggedIn(true);
       }
     } catch (err) {
+      console.error("Error loading saved username:", err);
     }
-  });
+  }, []);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setIsConnecting(true);
 
     if (!username.trim() || !chatroom.trim()) {
       setError("Please provide both username and chat room name.");
+      setIsConnecting(false);
       return;
     }
 
     try {
       localStorage.setItem("chatters.username", username.trim());
+      
+      router.push(`/chat/${encodeURIComponent(chatroom.trim())}`);
     } catch (err) {
+      console.error("Error saving username:", err);
+      setError("Failed to save username. Please try again.");
+      setIsConnecting(false);
     }
-
-    router.push(`/chat/${encodeURIComponent(chatroom.trim())}`);
   };
 
   const handleLogout = () => {
     try {
       localStorage.removeItem("chatters.username");
       setUsername("");
+      setChatroom("");
       setIsLoggedIn(false);
     } catch (err) {
+      console.error("Error during logout:", err);
     }
   };
 
@@ -115,8 +102,15 @@ export default function Home() {
               isRequired
             />
 
-            <Button color="secondary" type="submit" className="w-full" size="lg">
-              Join Chat
+            <Button 
+              color="secondary" 
+              type="submit" 
+              className="w-full" 
+              size="lg"
+              isLoading={isConnecting}
+              disabled={isConnecting}
+            >
+              {isConnecting ? "Connecting..." : "Join Chat"}
             </Button>
           </form>
         </CardBody>

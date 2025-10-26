@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Message } from "../../types/chat";
 import MessageList from "../components/MessageList";
@@ -13,67 +13,74 @@ export default function ChatRoomPage() {
   const router = useRouter();
   const room = (params as any)?.room ?? "general";
   const [messages, setMessages] = useState<Message[]>([]);
-  const [connected, setConnected] = useState(false);
-  const wsRef = useRef<WebSocket | null>(null);
-  const { setRoomName } = useRoom();
+  const { 
+    setRoomName, 
+    setUsername, 
+    isConnected, 
+    isConnecting, 
+    connectionError,
+    sendMessage,
+    joinRoom,
+    leaveRoom
+  } = useRoom();
 
+  // Ініціалізація кімнати та підключення до SignalR
   useEffect(() => {
-    setRoomName(room);
-    return () => setRoomName(null);
-  }, [room, setRoomName]);
-
-  useEffect(() => {
-    const ws = new WebSocket("ws://localhost:5000/ws");
-    wsRef.current = ws;
-
-    ws.addEventListener("open", () => {
-      setConnected(true);
-      ws.send(JSON.stringify({ type: "join", room }));
-    });
-
-    ws.addEventListener("message", (ev) => {
+    const initializeRoom = async () => {
       try {
-        const payload = JSON.parse(ev.data);
-        if (payload.type === "message") {
-          setMessages((prev) => [...prev, payload.message]);
+        // Отримуємо збережений username
+        const savedUsername = localStorage.getItem("chatters.username");
+        if (!savedUsername) {
+          router.push("/");
+          return;
         }
-        if (payload.type === "sentiment") {
-          setMessages((prev) =>
-            prev.map((m) => (m.id === payload.messageId ? { ...m, sentiment: payload.sentiment } : m))
-          );
-        }
-      } catch (err) {
-        console.error(err);
-      }
-    });
 
-    ws.addEventListener("close", () => setConnected(false));
-    ws.addEventListener("error", () => setConnected(false));
+        setUsername(savedUsername);
+        setRoomName(room);
+        
+        // Чекаємо поки SignalR підключиться, потім приєднуємося до кімнати
+        if (isConnected) {
+          await joinRoom(room, savedUsername);
+        }
+      } catch (error) {
+        console.error("Failed to initialize room:", error);
+      }
+    };
+
+    initializeRoom();
 
     return () => {
-      ws.close();
+      leaveRoom();
+      setRoomName(null);
+      setUsername(null);
     };
-  }, [room]);
+  }, [room, isConnected, setRoomName, setUsername, joinRoom, leaveRoom, router]);
 
   const handleSend = async (text: string) => {
-    const msg: Message = {
-      id: Math.random().toString(36).slice(2, 9),
-      content: text,
-      sender: "You",
-      timestamp: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, msg]);
-
-    wsRef.current?.send(JSON.stringify({ type: "message", room, message: msg }));
+    try {
+      await sendMessage(text);
+      
+      // Додаємо повідомлення локально для миттєвого відображення
+      const msg: Message = {
+        id: Math.random().toString(36).slice(2, 9),
+        content: text,
+        sender: "You",
+        timestamp: new Date().toISOString(),
+      };
+      
+      setMessages((prev) => [...prev, msg]);
+    } catch (error) {
+      console.error("Failed to send message:", error);
+    }
   };
 
+  // Тестові повідомлення для демонстрації (можна видалити в продакшені)
   useEffect(() => {
-    const testMessages: Message[] = Array.from({ length: 50 }, (_, i) => ({
+    const testMessages: Message[] = Array.from({ length: 5 }, (_, i) => ({
       id: `test-${i}`,
-      content: `Test message ${i + 1} - This is a much longer message to test scrolling functionality. Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.`,
+      content: `Test message ${i + 1} - Welcome to the chat room!`,
       sender: i % 2 === 0 ? "You" : "Other User",
-      timestamp: new Date(Date.now() - (50 - i) * 60000).toISOString(),
+      timestamp: new Date(Date.now() - (5 - i) * 60000).toISOString(),
     }));
     setMessages(testMessages);
   }, []);
@@ -92,7 +99,8 @@ export default function ChatRoomPage() {
               ← Back to Home
             </Button>
             <div className="text-sm text-foreground/60">
-              {connected ? "🟢 Connected" : "🟡 Connecting..."}
+              {isConnected ? "🟢 Connected" : isConnecting ? "🟡 Connecting..." : "🔴 Disconnected"}
+              {connectionError && <span className="text-danger ml-2">({connectionError})</span>}
             </div>
           </div>
           
