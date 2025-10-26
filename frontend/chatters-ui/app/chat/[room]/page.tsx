@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Message } from "../../types/chat";
 import { ErrorBoundary } from "../../components/ErrorBoundary";
@@ -14,12 +14,19 @@ export default function ChatRoomPage() {
   const router = useRouter();
   const room = (params as any)?.room ?? "general";
   const [messages, setMessages] = useState<Message[]>([]);
-  const { username, setUsername } = useRoom();
+  const { username, setUsername, leaveRoom } = useRoom();
   
   useEffect(() => {
     const savedUsername = localStorage.getItem("chatters.username");
     if (!savedUsername) {
       console.log("No saved username found, redirecting to login");
+      router.push('/');
+      return;
+    }
+    
+    if (savedUsername.toLowerCase() === 'system') {
+      console.log("Reserved username 'System' detected, redirecting to login");
+      localStorage.removeItem("chatters.username");
       router.push('/');
       return;
     }
@@ -36,12 +43,21 @@ export default function ChatRoomPage() {
     error: connectionError,
     invoke,
     on,
-    off
+    off,
+    disconnect,
   } = useSignalR({
-    url: "http://localhost:5243/chat",
+    url: process.env.SIGNALR_URL || "http://localhost:5243/chat",
     autoReconnect: true,
-    onConnected: () => {
+    onConnected: async () => {
       console.log("Connected to SignalR hub");
+      if (username && room) {
+        try {
+          await invoke("JoinChat", { userName: username, chatRoom: room });
+          console.log("Joined room:", room);
+        } catch (err) {
+          console.error("Failed to join room:", err);
+        }
+      }
     },
     onDisconnected: () => {
       console.log("Disconnected from SignalR hub");
@@ -53,7 +69,35 @@ export default function ChatRoomPage() {
     }
   });
 
+  const handleLeaveChat = useCallback(async () => {
+    console.log("Leaving chat...");
+    try {
+      await disconnect(); // 1. Закриваємо з'єднання SignalR
+      leaveRoom();       // 2. Очищуємо стан кімнати та користувача
+      router.push('/');  // 3. Перенаправляємо на головну сторінку
+    } catch (error) {
+      console.error("Failed to leave chat cleanly:", error);
+      // Навіть якщо є помилка, все одно перенаправляємо
+      router.push('/');
+    }
+  }, [disconnect, leaveRoom, router]);
+
   // Effect to handle SignalR connection and room joining
+  const handleSendMessage = async (text: string) => {
+    if (!isConnected || !username) {
+      console.error("Cannot send message: not connected or no username");
+      return;
+    }
+    
+    try {
+      await invoke("SendMessage", text);
+      console.log("Message sent successfully");
+    } catch (err) {
+      console.error("Failed to send message:", err);
+      throw err;
+    }
+  };
+
   useEffect(() => {
     if (!username || !room) {
       console.log("Waiting for username and room to be available");
@@ -157,23 +201,24 @@ export default function ChatRoomPage() {
     };
   }, [username, room, isConnected, on, off, invoke]);
 
-  const handleSend = async (text: string) => {
-    if (!isConnected || !username) return;
+  const handleSend = useCallback(async (text: string) => {
+    if (!isConnected || !username) {
+      console.error("Cannot send message: not connected or no username");
+      return;
+    }
 
     try {
-      await invoke("SendMessage", {
-        userName: username,
-        chatRoom: room,
-        message: text
-      });
+      await invoke("SendMessage", text);
+      console.log("Message sent successfully");
     } catch (error) {
       console.error("Failed to send message:", error);
+      throw error;
     }
-  };
+  }, [isConnected, username, invoke]);
 
   return (
     <ErrorBoundary>
-      <div className="h-screen flex flex-col bg-gradient-to-br from-violet-900 via-slate-950 to-slate-900">
+      <div className="h-[90vh] flex flex-col bg-gradient-to-br from-violet-900 via-slate-950 to-slate-900">
         <header className="px-6 py-4 flex items-center justify-between text-foreground/90">
           <div className="flex items-center gap-3">
             <h2 className="text-xl font-bold">Chatters</h2>
@@ -191,14 +236,22 @@ export default function ChatRoomPage() {
               <span className="ml-2 text-red-400">{connectionError}</span>
             )}
           </div>
+          <button
+            onClick={handleLeaveChat}
+            className="ml-4 px-3 py-1.5 rounded-md bg-red-600/80 hover:bg-red-600 text-white text-xs sm:text-sm font-medium transition-colors"
+          >
+            Leave
+          </button>
         </header>
 
-      <main className="flex-1 p-6">
-        <div className="max-w-4xl mx-auto h-full flex flex-col bg-content1/30 rounded-lg shadow-lg overflow-hidden">
-          <div className="flex-1 overflow-auto">
-            <MessageList messages={messages} />
+      <main className="flex-1 p-6 min-h-0">
+        <div className="max-w-4xl mx-auto h-full flex flex-col bg-content1/30 rounded-lg shadow-lg">
+          <div className="flex-1 overflow-hidden min-h-0">
+            <div className="h-full overflow-y-auto">
+              <MessageList messages={messages} currentUser={username || undefined} />
+            </div>
           </div>
-          <div className="border-t border-content1/20 p-4">
+          <div className="flex-none border-t border-content1/20 p-4">
             <ChatInput onSend={handleSend} />
           </div>
         </div>

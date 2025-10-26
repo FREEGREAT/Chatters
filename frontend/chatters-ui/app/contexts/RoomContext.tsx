@@ -31,12 +31,25 @@ export function RoomProvider({ children }: { children: ReactNode }) {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectionError, setConnectionError] = useState<string | null>(null);
 
+  const validateUsername = (username: string): boolean => {
+    if (username.toLowerCase() === 'system') {
+      setConnectionError('Username "System" is reserved and cannot be used');
+      return false;
+    }
+    return true;
+  };
+
   const joinRoom = async (roomName: string, username: string) => {
+    if (!validateUsername(username)) {
+      return;
+    }
+    localStorage.setItem("chatters.username", username);
     setRoomName(roomName);
     setUsername(username);
   };
 
   const leaveRoom = async () => {
+    localStorage.removeItem("chatters.username");
     setRoomName(null);
     setUsername(null);
   };

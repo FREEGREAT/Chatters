@@ -44,6 +44,13 @@ export default function Home() {
       return;
     }
 
+    if (trimmedUsername.toLowerCase() === 'system') {
+      console.log("Attempt to use reserved username 'System'");
+      setError('The username "System" is reserved and cannot be used.');
+      setIsConnecting(false);
+      return;
+    }
+
     try {
       console.log("Saving username to localStorage");
       localStorage.setItem("chatters.username", trimmedUsername);
