@@ -1,0 +1,16 @@
+{
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  },
+  "ConnectionStrings": {
+    "Redis": "localhost:6379"
+  },
+  "AzureTextAnalytics": {
+    "Endpoint": "URL"
+    "Key": "api_key"
+  },
+  "AllowedHosts": "*"
+}
