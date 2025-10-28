@@ -1,0 +1,91 @@
+name: Build and deploy Next.js app to Azure Web App
+
+on:
+  push:
+    branches:
+      - ui/frontend
+  workflow_dispatch:
+
+env:
+  APPLICATION_PUBLISH_PROFILE: ${{ secrets.APP_PUBLISH_PROFILE }}
+  WEBAPP_NAME: chatters-next-js
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js version
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+
+      - name: Debug - List frontend directory contents and configs
+        working-directory: ./frontend 
+        run: |
+          echo "--- Listing frontend directory contents ---"
+          ls -la
+          echo "--- Listing app directory contents ---"
+          ls -la app/
+          echo "--- Listing styles directory contents ---"
+          ls -la styles/
+          echo "--- Listing config directory contents ---"
+          ls -la config/
+          echo "--- Contents of tsconfig.json ---"
+          cat tsconfig.json || echo "tsconfig.json not found"
+          echo "--- Contents of app/layout.tsx ---"
+          cat app/layout.tsx || echo "app/layout.tsx not found"
+          echo "--- Contents of styles/globals.css ---"
+          cat styles/globals.css || echo "styles/globals.css not found"
+          echo "--- Contents of config/fonts.ts ---"
+          cat config/fonts.ts || echo "config/fonts.ts not found"
+        shell: bash
+
+      - name: Install dependencies and build Next.js app
+        working-directory: ./frontend
+        env:
+          NODE_ENV: production
+        run: |
+          npm ci
+          npm run build
+          echo "--- Build contents ---"
+          ls -la build/
+
+      - name: Prepare build output for Azure
+        run: |
+          mkdir build-output
+          cp -r frontend/build/standalone/* build-output/
+          cp -r frontend/build/static build-output/build/static
+          cp -r frontend/public build-output/public
+
+      - name: Create server.js for Azure
+        run: |
+          cat > build-output/server.js << 'EOF'
+          const { createServer } = require('http')
+          const { parse } = require('url')
+          const next = require('next')
+          
+          const port = process.env.PORT || 3000
+          const app = next({ dev: false, dir: __dirname })
+          const handle = app.getRequestHandler()
+          
+          app.prepare().then(() => {
+            createServer((req, res) => {
+              const parsedUrl = parse(req.url, true)
+              handle(req, res, parsedUrl)
+            }).listen(port, (err) => {
+              if (err) throw err
+              console.log(`> Ready on http://localhost:${port}`)
+            })
+          })
+          EOF
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ env.WEBAPP_NAME }}
+          publish-profile: ${{ env.APPLICATION_PUBLISH_PROFILE }}
+          package: ./build-output
