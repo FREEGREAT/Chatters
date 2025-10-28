@@ -8,16 +8,49 @@ This project is the backend service for a real-time chat application built with 
 -   **Message History:** Retrieves the 50 most recent messages upon joining a room.
 -   **Sentiment Analysis:** Automatically analyzes the sentiment of each message (positive, negative, or neutral) and broadcasts the result.
 -   **Persistent Storage:** All messages and their sentiment scores are saved to a SQL database.
--   **Scalable Session Management:** Uses Redis to store user connection information, enabling scalability across multiple server instances.
+-   **Intuitive UI:** The frontend is built with modern technologies to ensure a user-friendly and responsive interface.
+-   **Session Persistence:** The username is stored locally, simplifying the process of rejoining.
 
-## Technology Stack
+---
 
--   **Framework:** ASP.NET Core 9
+## Backend (API)
+
+The backend service forms the core of the application, handling chat logic, connections, and interactions with Azure services.
+
+### Technology Stack (Backend)
+
+-   **Framework:** ASP.NET Core 8
 -   **Real-Time Communication:** Azure SignalR Service
 -   **Database:** Azure SQL (via Entity Framework Core)
 -   **Caching:** Azure Cache for Redis
 -   **AI/ML:** Azure Cognitive Services - Text Analytics
 -   **Deployment:** Azure App Service
+
+---
+
+## Frontend (UI)
+
+The frontend is a client-side application built with Next.js, providing the user interface for interacting with the chat.
+
+### Features (Frontend)
+
+-   **Modern UI:** Built with Next.js (App Router) and the HeroUI component library.
+-   **Client-Side Routing:** Dynamic routes for chat rooms (e.g., `/chat/general`).
+-   **State Management:** Uses React Context for managing global state (username, room).
+-   **User Persistence:** The username is stored in `localStorage` for convenience.
+-   **Sentiment Display:** Messages can be visually distinguished based on their sentiment score.
+-   **Reliable Connection:** A custom `useSignalR` hook manages the SignalR connection lifecycle, including automatic reconnection.
+
+### Technology Stack (Frontend)
+
+-   **Framework:** Next.js 14+ (App Router)
+-   **Language:** TypeScript
+-   **UI Components:** HeroUI
+   **Styling:** Tailwind CSS
+-   **Real-Time Communication:** `@microsoft/signalr` client library
+
+---
+
 
 ## Project Structure
 
@@ -44,6 +77,20 @@ This project is the backend service for a real-time chat application built with 
    │            └── Program.cs                  # entry point and service config
    │            
    └──frontend/
+        └──app/
+            ├──chat/
+            │   ├──[room]
+            │   │    └──page.tsx
+            │   │
+            │   ├──components/*
+            │   └──hooks/*
+            ├──components/*
+            │
+            ├──page.tsx
+            ├──layout.tsx
+            ├──providers.tsx
+            └──error.tsx
+```
 ## Setup and Configuration
 
 ### Prerequisites for Backend
@@ -149,12 +196,36 @@ The application exposes a SignalR hub for real-time communication.
         -   `message`: The content of the message.
         -   `sentimentLabel`: The analyzed sentiment ("positive", "negative", "neutral").
         -   `sentimentScore`: The confidence score (0.0 - 1.0) for the analyzed sentiment.
+#### Running the Frontend
+
+6.  **Navigate to the frontend folder:**
+    ```sh
+    # From the project root
+    cd frontend
+    ```
+
+7.  **Install dependencies:**
+    ```sh
+    npm install
+    ```
+
+8.  **Configure environment variables:**
+    Create a `.env.local` file in the `frontend` folder and specify the URL of your running backend service.
+
+    **File: `.env.local`**
+    ```
+    # Replace the URL with your API's address (local or deployed on Azure)
+    NEXT_PUBLIC_SIGNALR_URL=https://localhost:7130/chat
+    ```
+    **Important:** The `NEXT_PUBLIC_` prefix is necessary to make the variable accessible in the browser.
+
+9.  **Run the frontend application:**
+    ```sh
+    npm run dev
+    ```
+    The application will be available at `http://localhost:3000`.
 
 ## Deployment
 
-This application is designed for deployment to **Azure App Service**.
-
-1.  Publish the project to a folder.
-2.  Deploy the published artifacts to your Azure App Service instance.
-3.  Configure the Application Settings in the Azure portal with the same keys as in `appsettings.json` (Connection Strings, Azure service keys, etc.).
-4.  Enable "Web Sockets" and set "ARR Affinity" to On in the App Service configuration to ensure stable SignalR connections.
+*   **Backend:** It is recommended to deploy to **Azure App Service**. Remember to configure all environment variables (connection strings, keys) in the "Configuration" section of your App Service and enable Web Sockets.
+*   **Frontend:** It is recommended to deploy to **Vercel** (from the creators of Next.js) or **Azure Static Web Apps**. Be sure to add the `NEXT_PUBLIC_SIGNALR_URL` environment variable with the public URL of your deployed API.
