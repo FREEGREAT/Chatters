@@ -20,24 +20,24 @@ builder.Services.AddStackExchangeRedisCache(options =>
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DBConnection")));
 
 builder.Services.AddScoped<ChatService>();
 
 
-//builder.Services.AddOpenApi();
 
 builder.Services.AddCors(options =>
 {
     options.AddDefaultPolicy(policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(
+                "https://chattersui-a9dbatbfd8hegvf8.polandcentral-01.azurewebsites.net" 
+            )
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
 });
-
 builder.Services.AddSignalR();
 
 

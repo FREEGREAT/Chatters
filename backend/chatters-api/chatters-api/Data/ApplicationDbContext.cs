@@ -11,7 +11,7 @@ namespace chatters_api.Data
         {
         }
 
-        public DbSet<Message> Messages { get; set; } = null!; // Коллекция сообщений
+        public DbSet<Message> Messages { get; set; } = null!; 
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

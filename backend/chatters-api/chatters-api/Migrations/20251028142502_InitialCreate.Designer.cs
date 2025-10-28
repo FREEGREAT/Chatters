@@ -12,7 +12,7 @@ using chatters_api.Data;
 namespace chatters_api.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20251026200650_InitialCreate")]
+    [Migration("20251028142502_InitialCreate")]
     partial class InitialCreate
     {
         /// <inheritdoc />

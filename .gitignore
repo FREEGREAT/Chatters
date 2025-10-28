@@ -57,3 +57,6 @@ nunit-*.xml
 #idea
 .idea/
 .vscode/
+
+appsettings.Development.json
+appsettings.json
