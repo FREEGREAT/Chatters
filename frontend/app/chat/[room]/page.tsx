@@ -46,7 +46,7 @@ export default function ChatRoomPage() {
     off,
     disconnect,
   } = useSignalR({
-    url: process.env.SIGNALR_URL || "http://localhost:5243/chat",
+    url: process.env.SIGNALR_URL || "https://chatters-api-augycefuauhmavdm.polandcentral-01.azurewebsites.net/chat",
     autoReconnect: true,
     onConnected: async () => {
       console.log("Connected to SignalR hub");
